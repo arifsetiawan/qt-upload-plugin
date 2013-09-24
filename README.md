@@ -3,7 +3,7 @@
 Implement:
 
 * Multipart file upload
-* [tus](http://tus.io/) resumable file upload
+* [tus](http://tus.io/) resumable file upload. Follow [brewtus](https://github.com/vayam/brewtus) implementation
 
 Upload host is in [download host](https://github.com/arifsetiawan/qt-download-host)
 
