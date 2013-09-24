@@ -5,6 +5,7 @@
 #include <QUuid>
 #include <QFileInfo>
 #include <QTimer>
+#include <QBuffer>
 
 #include "json.h"
 using QtJson::JsonObject;
@@ -13,7 +14,7 @@ using QtJson::JsonArray;
 UploadPlugin::UploadPlugin(QObject * parent)
     : UploadInterface (parent)
 {
-    m_uploadProtocol == UploadInterface::ProtocolTus;
+
 }
 
 Q_EXPORT_PLUGIN2(UploadPlugin, UploadPlugin)
@@ -31,6 +32,15 @@ QString UploadPlugin::name(void) const
 QString UploadPlugin::version() const
 {
     return "1.0";
+}
+
+void UploadPlugin::setDefaultParameters()
+{
+    m_uploadProtocol == UploadInterface::ProtocolTus;
+    m_userAgent = "UploadPlugin/0.0.2";
+    m_chunkSize = 50*1024;
+    m_bandwidthLimit = 30*1024;
+    m_queueSize = 2;
 }
 
 void UploadPlugin::append(const QString &file)
@@ -112,12 +122,86 @@ void UploadPlugin::connectSignals(QNetworkReply *reply)
             this, SLOT(uploadSslErrors(QList<QSslError>)));
 }
 
+void UploadPlugin::uploadChunk(QNetworkReply *reply)
+{
+    UploadItem item = uploadHash[reply];
+
+    if (item.chunkCounter == 0) {
+        item.time.start();
+        item.start = 0;
+        item.end = 0;
+    }
+
+    if (item.start < item.size)
+    {
+        item.end = item.start + m_chunkSize;
+        if (item.end > item.size)
+        {
+            item.end = item.size;
+        }
+
+        qint64 size = item.end - item.start;
+
+        qDebug() << item.start << item.end << size;
+
+        QByteArray offset;
+        offset.setNum(item.start);
+
+        QByteArray length;
+        length.setNum(item.end - item.start);
+
+        uchar *buf = item.file->map(item.start, size);
+        QBuffer * buffer = new QBuffer();
+        buffer->setData(reinterpret_cast<const char*>(buf), size);
+        buffer->close();
+
+        QNetworkRequest request(item.submitUrl);
+        request.setRawHeader("User-Agent", m_userAgent);
+        request.setRawHeader("Connection", "keep-alive");
+        request.setRawHeader("Offset", offset);
+        request.setRawHeader("Content-Length", length);
+        request.setRawHeader("Content-Type", "application/offset+octet-stream");
+
+        // remove previous reply
+        uploadHash.remove(reply);
+        qDebug() << "uploadChunk prev" << reply;
+
+        QNetworkReply * reply = manager.sendCustomRequest(request, "PATCH", buffer);
+        connectSignals(reply);
+
+        item.file->unmap(buf);
+        item.start += size;
+
+        uploadHash[reply] = item;
+        urlHash[item.path] = reply;
+
+        qDebug() << "uploadChunk" << reply;
+    }
+    else
+    {
+        qDebug() << "DONE. Me think";
+        item.file->close();
+        item.file->deleteLater();
+
+        uploadHash.remove(reply);
+        urlHash.remove(item.path);
+
+        qDebug() << "u" << uploadHash.size();
+
+        startNextUpload();
+    }
+}
+
 void UploadPlugin::startNextUpload()
 {
+    qDebug() << "q1" << uploadQueue.isEmpty();
+
     if (uploadQueue.isEmpty()) {
         emit finishedAll();
         return;
     }
+
+    qDebug() << "q2" << uploadHash.size() << m_queueSize;
 
     if (uploadHash.size() < m_queueSize)
     {
@@ -126,29 +210,32 @@ void UploadPlugin::startNextUpload()
         if (m_uploadProtocol == UploadInterface::ProtocolTus) {
 
             item.file = new QFile(item.path);
+            item.file->open(QIODevice::ReadOnly);
+            item.size = item.file->size();
             item.stage = 0;
+            item.final = false;
 
             QNetworkRequest request(m_uploadUrl);
             request.setRawHeader("User-Agent", m_userAgent);
             QByteArray fileLength;
-            fileLength.setNum(item.file->size());
+            fileLength.setNum(item.size);
             request.setRawHeader("Final-Length", fileLength);
             QByteArray contentLength;
             contentLength.setNum(0);
-            request.setRawHeader("Content-Length", 0);
+            request.setRawHeader("Content-Length", contentLength);
             request.setRawHeader("Content-Type", "application/octet-stream");
 
             QNetworkReply * reply = manager.post(request, "");
             connectSignals(reply);
 
-            emit status(item.path, "Upload", "Start uploading file", item.postUrl);
+            emit status(item.path, "Register", "Start registering file", m_uploadUrl.toString());
 
-            item.time.start();
             uploadHash[reply] = item;
+            qDebug() << "startNextUpload" << reply;
             urlHash[item.path] = reply;
 
         }
-        else if (m_uploadProtocol == UploadInterface::ProtocolTus) {
+        else if (m_uploadProtocol == UploadInterface::ProtocolMultipart) {
 
             QHttpMultiPart *multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
 
@@ -166,10 +253,16 @@ void UploadPlugin::startNextUpload()
             QNetworkRequest request(m_uploadUrl);
             request.setRawHeader("User-Agent", m_userAgent);
 
-            QNetworkReply * reply = networkAccessManager->post(request, multiPart);
+            QNetworkReply * reply = manager.post(request, multiPart);
             multiPart->setParent(reply);
+
+            item.time.start();
+            uploadHash[reply] = item;
+            urlHash[item.path] = reply;
         }
-        else {
+        else
+        {
+            qDebug() << m_uploadProtocol;
             qDebug() << "No one knows";
         }
 
@@ -179,22 +272,98 @@ void UploadPlugin::startNextUpload()
 
 void UploadPlugin::uploadProgress(qint64 bytesReceived, qint64 bytesTotal)
 {
+    /*
+    qDebug() << "a";
 
-}
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
 
-void UploadPlugin::uploadReadyRead()
-{
+    UploadItem item = uploadHash[reply];
+    qint64 actualReceived = item.size + bytesReceived;
+    qint64 actualTotal = item.size + bytesTotal;
+    double speed = actualReceived * 1000.0 / item.time.elapsed();
+    */
+    //qDebug() << actualReceived << actualTotal << speed;
 
+    /*
+    QString unit;
+    if (speed < 1024) {
+        unit = "bytes/sec";
+    } else if (speed < 1024*1024) {
+        speed /= 1024;
+        unit = "kB/s";
+    } else {
+        speed /= 1024*1024;
+        unit = "MB/s";
+    }
+    int percent = actualReceived * 100 / actualTotal;
+
+    if (item.stage > 0) {
+        qDebug() << "downloadProgress" << item.submitUrl << bytesReceived << bytesTotal << percent << speed << unit;
+        emit progress(item.submitUrl, actualReceived, actualTotal, percent, speed, unit);
+    }
+
+    qDebug() << "b";
+    */
 }
 
 void UploadPlugin::uploadFinished()
 {
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    UploadItem item = uploadHash[reply];
+    int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
+    //qDebug() << item.stage << statusCode;
+
+    if(reply->error() == QNetworkReply::NoError)
+    {
+        if (m_uploadProtocol == UploadInterface::ProtocolTus)
+        {
+            if (item.stage == 0)
+            {
+                if (statusCode == 201)
+                {
+                    QByteArray location = reply->rawHeader("Location");
+
+                    qDebug() << "Get submit url" << location;
+
+                    item.submitUrl = QUrl(location);
+                    item.stage = 1;
+                    item.chunkCounter = 0;
+
+                    uploadHash[reply] = item;
+                    qDebug() << "uploadFinished" << reply;
+                    uploadChunk(reply);
+                }
+                else
+                {
+                    qDebug() << "statusCode" << statusCode;
+                }
+            }
+            else
+            {
+                qDebug() << "uploadFinished" << "chunk" << reply;
+
+                item.chunkCounter = item.chunkCounter + 1;
+                uploadHash[reply] = item;
+                uploadChunk(reply);
+            }
+        }
+        else if (m_uploadProtocol == UploadInterface::ProtocolMultipart) {
+
+        }
+        else {
+            qDebug() << "No one knows";
+        }
+    }
+
+    reply->deleteLater();
 }
 
 void UploadPlugin::uploadError(QNetworkReply::NetworkError)
 {
-
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    UploadItem item = uploadHash[reply];
+    qDebug() << "uploadError: " << item.submitUrl << reply->errorString();
 }
 
 void UploadPlugin::uploadSslErrors(QList<QSslError>)

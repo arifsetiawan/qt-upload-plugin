@@ -21,10 +21,15 @@
 struct UploadItem{
     QString key;
     QString path;
-    QString submitUrl;
+    QUrl submitUrl;
     QFile *file;
     QTime time;
     int stage;
+    int chunkCounter;
+    bool final;
+    qint64 size;
+    qint64 start;
+    qint64 end;
 };
 
 class UploadPlugin : public UploadInterface
@@ -38,6 +43,7 @@ public:
 
     QString name() const;
     QString version() const;
+    void setDefaultParameters();
 
     void append(const QString &file);
     void append(const QStringList & fileList);
@@ -70,6 +76,8 @@ private:
 
     void stopUpload(const QString &url, bool pause);
     void connectSignals(QNetworkReply *reply);
+
+    void uploadChunk(QNetworkReply *reply);
 
 private:
     QNetworkAccessManager manager;
