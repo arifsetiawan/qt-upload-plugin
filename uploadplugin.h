@@ -30,6 +30,7 @@ struct UploadItem{
     qint64 size;
     qint64 start;
     qint64 end;
+    qint64 sent;
 };
 
 class UploadPlugin : public UploadInterface
@@ -63,7 +64,7 @@ public:
 
 private slots:
     void startNextUpload();
-    void uploadProgress(qint64 bytesReceived, qint64 bytesTotal);
+    void uploadProgress(qint64 bytesSent, qint64 bytesTotal);
     void uploadFinished();
     void uploadError(QNetworkReply::NetworkError);
     void uploadSslErrors(QList<QSslError>);

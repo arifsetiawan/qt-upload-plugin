@@ -141,8 +141,9 @@ void UploadPlugin::uploadChunk(QNetworkReply *reply)
         }
 
         qint64 size = item.end - item.start;
+        item.sent = item.start;
 
-        qDebug() << item.start << item.end << size;
+        qDebug() << item.start << item.end;
 
         QByteArray offset;
         offset.setNum(item.start);
@@ -164,7 +165,6 @@ void UploadPlugin::uploadChunk(QNetworkReply *reply)
 
         // remove previous reply
         uploadHash.remove(reply);
-        qDebug() << "uploadChunk prev" << reply;
 
         QNetworkReply * reply = manager.sendCustomRequest(request, "PATCH", buffer);
         connectSignals(reply);
@@ -174,8 +174,6 @@ void UploadPlugin::uploadChunk(QNetworkReply *reply)
 
         uploadHash[reply] = item;
         urlHash[item.path] = reply;
-
-        qDebug() << "uploadChunk" << reply;
     }
     else
     {
@@ -186,22 +184,16 @@ void UploadPlugin::uploadChunk(QNetworkReply *reply)
         uploadHash.remove(reply);
         urlHash.remove(item.path);
 
-        qDebug() << "u" << uploadHash.size();
-
         startNextUpload();
     }
 }
 
 void UploadPlugin::startNextUpload()
 {
-    qDebug() << "q1" << uploadQueue.isEmpty();
-
     if (uploadQueue.isEmpty()) {
         emit finishedAll();
         return;
     }
-
-    qDebug() << "q2" << uploadHash.size() << m_queueSize;
 
     if (uploadHash.size() < m_queueSize)
     {
@@ -212,8 +204,11 @@ void UploadPlugin::startNextUpload()
             item.file = new QFile(item.path);
             item.file->open(QIODevice::ReadOnly);
             item.size = item.file->size();
+            qDebug() << "size" << item.size;
             item.stage = 0;
             item.final = false;
+            item.sent = 0;
+            item.start = 0;
 
             QNetworkRequest request(m_uploadUrl);
             request.setRawHeader("User-Agent", m_userAgent);
@@ -231,7 +226,6 @@ void UploadPlugin::startNextUpload()
             emit status(item.path, "Register", "Start registering file", m_uploadUrl.toString());
 
             uploadHash[reply] = item;
-            qDebug() << "startNextUpload" << reply;
             urlHash[item.path] = reply;
 
         }
@@ -270,21 +264,12 @@ void UploadPlugin::startNextUpload()
     }
 }
 
-void UploadPlugin::uploadProgress(qint64 bytesReceived, qint64 bytesTotal)
+void UploadPlugin::uploadProgress(qint64 bytesSent, qint64 bytesTotal)
 {
-    /*
-    qDebug() << "a";
-
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
-
     UploadItem item = uploadHash[reply];
-    qint64 actualReceived = item.size + bytesReceived;
-    qint64 actualTotal = item.size + bytesTotal;
-    double speed = actualReceived * 1000.0 / item.time.elapsed();
-    */
-    //qDebug() << actualReceived << actualTotal << speed;
-
-    /*
+    qint64 actualSent = item.sent + bytesSent;
+    double speed = actualSent * 1000.0 / item.time.elapsed();
     QString unit;
     if (speed < 1024) {
         unit = "bytes/sec";
@@ -295,15 +280,12 @@ void UploadPlugin::uploadProgress(qint64 bytesReceived, qint64 bytesTotal)
         speed /= 1024*1024;
         unit = "MB/s";
     }
-    int percent = actualReceived * 100 / actualTotal;
+    int percent = actualSent * 100 / item.size;
 
     if (item.stage > 0) {
-        qDebug() << "downloadProgress" << item.submitUrl << bytesReceived << bytesTotal << percent << speed << unit;
-        emit progress(item.submitUrl, actualReceived, actualTotal, percent, speed, unit);
+        qDebug() << "upload" << item.submitUrl << actualSent << item.size << percent << speed << unit;
+        emit progress(item.path, actualSent, item.size, percent, speed, unit);
     }
-
-    qDebug() << "b";
-    */
 }
 
 void UploadPlugin::uploadFinished()
@@ -311,8 +293,9 @@ void UploadPlugin::uploadFinished()
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     UploadItem item = uploadHash[reply];
     int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    QByteArray customVerb = reply->request().attribute(QNetworkRequest::CustomVerbAttribute).toByteArray();
 
-    //qDebug() << item.stage << statusCode;
+    //qDebug() << statusCode << customVerb;
 
     if(reply->error() == QNetworkReply::NoError)
     {
@@ -331,7 +314,7 @@ void UploadPlugin::uploadFinished()
                     item.chunkCounter = 0;
 
                     uploadHash[reply] = item;
-                    qDebug() << "uploadFinished" << reply;
+                    //qDebug() << "uploadFinished" << reply;
                     uploadChunk(reply);
                 }
                 else
@@ -341,7 +324,7 @@ void UploadPlugin::uploadFinished()
             }
             else
             {
-                qDebug() << "uploadFinished" << "chunk" << reply;
+                //qDebug() << "uploadFinished" << "chunk" << reply;
 
                 item.chunkCounter = item.chunkCounter + 1;
                 uploadHash[reply] = item;
