@@ -181,6 +181,9 @@ void UploadPlugin::uploadChunk(QNetworkReply *reply)
         item.file->close();
         item.file->deleteLater();
 
+        emit status(item.path, "Complete", "Upload file completed", item.submitUrl);
+        emit finished(item.path, item.submitUrl);
+
         uploadHash.remove(reply);
         urlHash.remove(item.path);
 
@@ -283,7 +286,7 @@ void UploadPlugin::uploadProgress(qint64 bytesSent, qint64 bytesTotal)
     int percent = actualSent * 100 / item.size;
 
     if (item.stage > 0) {
-        qDebug() << "upload" << item.submitUrl << actualSent << item.size << percent << speed << unit;
+        //qDebug() << "upload" << item.path << actualSent << item.size << percent << speed << unit;
         emit progress(item.path, actualSent, item.size, percent, speed, unit);
     }
 }
@@ -347,6 +350,9 @@ void UploadPlugin::uploadError(QNetworkReply::NetworkError)
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     UploadItem item = uploadHash[reply];
     qDebug() << "uploadError: " << item.submitUrl << reply->errorString();
+
+    emit status(item.path, "Error", reply->errorString(), item.submitUrl);
+    emit progress(item.path, 0, 0, 0, 0, "bytes/sec");
 }
 
 void UploadPlugin::uploadSslErrors(QList<QSslError>)
