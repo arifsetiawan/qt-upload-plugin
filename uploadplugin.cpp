@@ -156,7 +156,7 @@ void UploadPlugin::uploadChunk(QNetworkReply *reply)
         buffer->setData(reinterpret_cast<const char*>(buf), size);
         buffer->close();
 
-        QNetworkRequest request(item.submitUrl);
+        QNetworkRequest request(QUrl(item.submitUrl));
         request.setRawHeader("User-Agent", m_userAgent);
         request.setRawHeader("Connection", "keep-alive");
         request.setRawHeader("Offset", offset);
@@ -180,6 +180,8 @@ void UploadPlugin::uploadChunk(QNetworkReply *reply)
         qDebug() << "DONE. Me think";
         item.file->close();
         item.file->deleteLater();
+
+        completedList.append(item);
 
         emit status(item.path, "Complete", "Upload file completed", item.submitUrl);
         emit finished(item.path, item.submitUrl);
@@ -312,12 +314,12 @@ void UploadPlugin::uploadFinished()
 
                     qDebug() << "Get submit url" << location;
 
-                    item.submitUrl = QUrl(location);
+                    item.submitUrl = location;
                     item.stage = 1;
                     item.chunkCounter = 0;
 
-                    uploadHash[reply] = item;
                     //qDebug() << "uploadFinished" << reply;
+                    uploadHash[reply] = item;
                     uploadChunk(reply);
                 }
                 else
@@ -328,7 +330,6 @@ void UploadPlugin::uploadFinished()
             else
             {
                 //qDebug() << "uploadFinished" << "chunk" << reply;
-
                 item.chunkCounter = item.chunkCounter + 1;
                 uploadHash[reply] = item;
                 uploadChunk(reply);

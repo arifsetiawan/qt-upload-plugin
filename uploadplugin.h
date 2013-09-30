@@ -18,10 +18,10 @@
 #include <QSslError>
 #include <QHttpMultiPart>
 
-struct UploadItem{
+struct UploadItem {
     QString key;
     QString path;
-    QUrl submitUrl;
+    QString submitUrl;
     QFile *file;
     QTime time;
     int stage;
@@ -46,6 +46,8 @@ public:
     QString version() const;
     void setDefaultParameters();
 
+    QString getStatus() const;
+
     void append(const QString &file);
     void append(const QStringList & fileList);
 
@@ -59,8 +61,6 @@ public:
     void stop(const QStringList & urlList);
 
     void setBandwidthLimit(int size);
-
-    QString getStatus() const;
 
 private slots:
     void startNextUpload();
