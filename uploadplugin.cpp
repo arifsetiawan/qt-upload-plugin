@@ -318,6 +318,8 @@ void UploadPlugin::uploadFinished()
                     item.stage = 1;
                     item.chunkCounter = 0;
 
+                    emit urlSet(item.path, item.submitUrl);
+
                     //qDebug() << "uploadFinished" << reply;
                     uploadHash[reply] = item;
                     uploadChunk(reply);
