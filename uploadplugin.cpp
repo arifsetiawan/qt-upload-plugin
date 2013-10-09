@@ -36,7 +36,7 @@ QString UploadPlugin::version() const
 
 void UploadPlugin::setDefaultParameters()
 {
-    m_uploadProtocol == UploadInterface::ProtocolTus;
+    m_uploadProtocol = UploadInterface::ProtocolTus;
     m_userAgent = "UploadPlugin/0.0.2";
     m_chunkSize = 50*1024;
     m_bandwidthLimit = 30*1024;
@@ -143,7 +143,7 @@ void UploadPlugin::uploadChunk(QNetworkReply *reply)
         qint64 size = item.end - item.start;
         item.sent = item.start;
 
-        qDebug() << item.start << item.end;
+        //qDebug() << item.start << item.end;
 
         QByteArray offset;
         offset.setNum(item.start);
@@ -177,7 +177,7 @@ void UploadPlugin::uploadChunk(QNetworkReply *reply)
     }
     else
     {
-        qDebug() << "DONE. Me think";
+        qDebug() << "DONE. Uploaded" << item.path << "to" << item.submitUrl;
         item.file->close();
         item.file->deleteLater();
 
@@ -209,7 +209,7 @@ void UploadPlugin::startNextUpload()
             item.file = new QFile(item.path);
             item.file->open(QIODevice::ReadOnly);
             item.size = item.file->size();
-            qDebug() << "size" << item.size;
+            //qDebug() << "size" << item.size;
             item.stage = 0;
             item.final = false;
             item.sent = 0;
