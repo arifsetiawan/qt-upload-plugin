@@ -26,11 +26,12 @@ struct UploadItem {
     QTime time;
     int stage;
     int chunkCounter;
-    bool final;
+    bool isResume;
     qint64 size;
     qint64 start;
     qint64 end;
     qint64 sent;
+    QByteArray historyId;
 };
 
 class UploadPlugin : public UploadInterface
@@ -48,17 +49,17 @@ public:
 
     QString getStatus() const;
 
-    void append(const QString &file);
-    void append(const QStringList & fileList);
+    void append(const QString &path);
+    void append(const QStringList &pathList);
 
-    void pause(const QString &url);
-    void pause(const QStringList & urlList);
+    void pause(const QString &path);
+    void pause(const QStringList &pathList);
 
-    void resume(const QString &url);
-    void resume(const QStringList & urlList);
+    void resume(const QString &path, const QString &submitUrl = "");
+    void resume(const QStringList &pathList);
 
-    void stop(const QString &url);
-    void stop(const QStringList & urlList);
+    void stop(const QString &path);
+    void stop(const QStringList &pathList);
 
     void setBandwidthLimit(int size);
 
@@ -79,6 +80,8 @@ private:
     void connectSignals(QNetworkReply *reply);
 
     void uploadChunk(QNetworkReply *reply);
+
+    QByteArray getChecksum(const QString &filename);
 
 private:
     QNetworkAccessManager manager;

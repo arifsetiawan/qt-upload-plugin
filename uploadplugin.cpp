@@ -43,15 +43,16 @@ void UploadPlugin::setDefaultParameters()
     m_queueSize = 2;
 }
 
-void UploadPlugin::append(const QString &file)
+void UploadPlugin::append(const QString &path)
 {
-    QFileInfo fi(file);
+    QFileInfo fi(path);
 
-    qDebug() << "upload append" << file;
+    qDebug() << "upload append" << path;
 
     UploadItem item;
     item.key = fi.fileName();
-    item.path = file;
+    item.path = path;
+    item.isResume = false;
 
     if (uploadQueue.isEmpty())
         QTimer::singleShot(0, this, SLOT(startNextUpload()));
@@ -59,53 +60,66 @@ void UploadPlugin::append(const QString &file)
     uploadQueue.enqueue(item);
 }
 
-void UploadPlugin::append(const QStringList &fileList)
+void UploadPlugin::append(const QStringList &pathList)
 {
-    foreach (QString file, fileList){
-        append(file);
+    foreach (QString path, pathList){
+        append(path);
     }
 
     if (uploadQueue.isEmpty())
         QTimer::singleShot(0, this, SIGNAL(finishedAll()));
 }
 
-void UploadPlugin::pause(const QString &url)
+void UploadPlugin::pause(const QString &path)
 {
-    stopUpload(url, true);
+    stopUpload(path, true);
 }
 
-void UploadPlugin::pause(const QStringList &urlList)
+void UploadPlugin::pause(const QStringList &pathList)
 {
-    foreach (QString url, urlList){
-        pause(url);
+    foreach (QString path, pathList){
+        pause(path);
     }
 }
 
-void UploadPlugin::resume(const QString &url)
+void UploadPlugin::resume(const QString &path, const QString &submitUrl)
 {
-    append(url);
+    QFileInfo fi(path);
+
+    qDebug() << "upload append" << path;
+
+    UploadItem item;
+    item.key = fi.fileName();
+    item.path = path;
+    item.isResume = true;
+    item.submitUrl = submitUrl;
+
+    if (uploadQueue.isEmpty())
+        QTimer::singleShot(0, this, SLOT(startNextUpload()));
+
+    uploadQueue.enqueue(item);
 }
 
-void UploadPlugin::resume(const QStringList & urlList)
+void UploadPlugin::resume(const QStringList & pathList)
 {
-    foreach (QString url, urlList){
-        resume(url);
+    foreach (QString path, pathList){
+        resume(path);
     }
 }
 
-void UploadPlugin::stop(const QString &url)
+void UploadPlugin::stop(const QString &path)
 {
-    stopUpload(url, false);
+    stopUpload(path, false);
 }
 
-void UploadPlugin::stop(const QStringList &urlList)
+void UploadPlugin::stop(const QStringList &pathList)
 {
-    foreach (QString url, urlList){
-        stop(url);
+    foreach (QString path, pathList){
+        stop(path);
     }
 }
 
-void UploadPlugin::stopUpload(const QString &url, bool pause)
+void UploadPlugin::stopUpload(const QString &path, bool pause)
 {
 
 }
@@ -126,10 +140,18 @@ void UploadPlugin::uploadChunk(QNetworkReply *reply)
 {
     UploadItem item = uploadHash[reply];
 
-    if (item.chunkCounter == 0) {
-        item.time.start();
-        item.start = 0;
-        item.end = 0;
+    if (item.chunkCounter == 0)
+    {
+        if (item.isResume)
+        {
+            item.time.start();
+        }
+        else
+        {
+            item.time.start();
+            // init with zero
+            item.start = 0;
+        }
     }
 
     if (item.start < item.size)
@@ -163,6 +185,11 @@ void UploadPlugin::uploadChunk(QNetworkReply *reply)
         request.setRawHeader("Content-Length", length);
         request.setRawHeader("Content-Type", "application/offset+octet-stream");
 
+        if (item.historyId.length() > 0)
+        {
+            request.setRawHeader("History-Id", item.historyId);
+        }
+
         // remove previous reply
         uploadHash.remove(reply);
 
@@ -193,6 +220,23 @@ void UploadPlugin::uploadChunk(QNetworkReply *reply)
     }
 }
 
+QByteArray UploadPlugin::getChecksum(const QString &filename)
+{
+    QCryptographicHash hash(QCryptographicHash::Sha1);
+    QFile file(filename);
+
+    if (file.open(QIODevice::ReadOnly))
+    {
+        hash.addData( file.readAll() );
+    }
+    else
+    {
+        qDebug() << "Failed to open file" << filename;
+    }
+
+    return hash.result();
+}
+
 void UploadPlugin::startNextUpload()
 {
     if (uploadQueue.isEmpty()) {
@@ -204,35 +248,60 @@ void UploadPlugin::startNextUpload()
     {
         UploadItem item = uploadQueue.dequeue();
 
-        if (m_uploadProtocol == UploadInterface::ProtocolTus) {
+        if (m_uploadProtocol == UploadInterface::ProtocolTus)
+        {
+            if (item.isResume)
+            {
+                item.file = new QFile(item.path);
+                item.file->open(QIODevice::ReadOnly);
+                item.size = item.file->size();
+                item.stage = 0;
+                item.sent = 0;
+                item.start = 0;
 
-            item.file = new QFile(item.path);
-            item.file->open(QIODevice::ReadOnly);
-            item.size = item.file->size();
-            //qDebug() << "size" << item.size;
-            item.stage = 0;
-            item.final = false;
-            item.sent = 0;
-            item.start = 0;
+                QNetworkRequest request(QUrl(item.submitUrl));
+                request.setRawHeader("User-Agent", m_userAgent);
 
-            QNetworkRequest request(m_uploadUrl);
-            request.setRawHeader("User-Agent", m_userAgent);
-            QByteArray fileLength;
-            fileLength.setNum(item.size);
-            request.setRawHeader("Final-Length", fileLength);
-            QByteArray contentLength;
-            contentLength.setNum(0);
-            request.setRawHeader("Content-Length", contentLength);
-            request.setRawHeader("Content-Type", "application/octet-stream");
+                QNetworkReply * reply = manager.sendCustomRequest(request, "HEAD");
+                connectSignals(reply);
+            }
+            else
+            {
+                item.file = new QFile(item.path);
+                item.file->open(QIODevice::ReadOnly);
+                item.size = item.file->size();
+                item.stage = 0;
+                item.sent = 0;
+                item.start = 0;
 
-            QNetworkReply * reply = manager.post(request, "");
-            connectSignals(reply);
+                QNetworkRequest request(m_uploadUrl);
+                request.setRawHeader("User-Agent", m_userAgent);
+                QByteArray fileLength;
+                fileLength.setNum(item.size);
+                request.setRawHeader("Final-Length", fileLength);
+                QByteArray contentLength;
+                contentLength.setNum(0);
+                request.setRawHeader("Content-Length", contentLength);
+                request.setRawHeader("Content-Type", "application/octet-stream");
 
-            emit status(item.path, "Register", "Start registering file", m_uploadUrl.toString());
+                if (m_additionalHeaders.length() > 0)
+                {
+                    qDebug() << "Has additional headers";
+                    for (int i = 0; i < m_additionalHeaders.size(); i++)
+                    {
+                        RawHeaderPair header = m_additionalHeaders[i];
+                        request.setRawHeader(header.first, header.second);
+                    }
+                }
 
-            uploadHash[reply] = item;
-            urlHash[item.path] = reply;
+                QNetworkReply * reply = manager.post(request, "");
+                connectSignals(reply);
 
+                emit status(item.path, "Register", "Start registering file", m_uploadUrl.toString());
+
+                uploadHash[reply] = item;
+                urlHash[item.path] = reply;
+            }
         }
         else if (m_uploadProtocol == UploadInterface::ProtocolMultipart) {
 
@@ -298,8 +367,8 @@ void UploadPlugin::uploadFinished()
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     UploadItem item = uploadHash[reply];
     int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    QByteArray customVerb = reply->request().attribute(QNetworkRequest::CustomVerbAttribute).toByteArray();
 
+    //QByteArray customVerb = reply->request().attribute(QNetworkRequest::CustomVerbAttribute).toByteArray();
     //qDebug() << statusCode << customVerb;
 
     if(reply->error() == QNetworkReply::NoError)
@@ -308,25 +377,65 @@ void UploadPlugin::uploadFinished()
         {
             if (item.stage == 0)
             {
-                if (statusCode == 201)
+                if (item.isResume)
                 {
-                    QByteArray location = reply->rawHeader("Location");
+                    QByteArray offset = reply->rawHeader("Offset");
 
-                    qDebug() << "Get submit url" << location;
+                    qDebug() << "Get resume offset" << offset;
 
-                    item.submitUrl = location;
                     item.stage = 1;
                     item.chunkCounter = 0;
+                    item.start = offset.toLongLong();
 
-                    emit urlSet(item.path, item.submitUrl);
+                    if (reply->hasRawHeader("History-Id"))
+                    {
+                        QByteArray historyId = reply->rawHeader("Location");
+                        qDebug() << "Has history id" << historyId;
+                        item.historyId = historyId;
+                    }
+                    else
+                    {
+                        qDebug() << "No history Id";
+                        qDebug() << reply->rawHeaderList();
+                    }
 
-                    //qDebug() << "uploadFinished" << reply;
                     uploadHash[reply] = item;
                     uploadChunk(reply);
                 }
                 else
                 {
-                    qDebug() << "statusCode" << statusCode;
+                    if (statusCode == 201)
+                    {
+                        QByteArray location = reply->rawHeader("Location");
+
+                        qDebug() << "Get submit url" << location;
+
+                        item.submitUrl = location;
+                        item.stage = 1;
+                        item.chunkCounter = 0;
+
+                        if (reply->hasRawHeader("History-Id"))
+                        {
+                            QByteArray historyId = reply->rawHeader("Location");
+                            qDebug() << "Has history id" << historyId;
+                            item.historyId = historyId;
+                        }
+                        else
+                        {
+                            qDebug() << "No history Id";
+                            qDebug() << reply->rawHeaderList();
+                        }
+
+                        emit urlSet(item.path, item.submitUrl);
+
+                        uploadHash[reply] = item;
+                        uploadChunk(reply);
+                    }
+                    else
+                    {
+                        qDebug() << "statusCode" << statusCode;
+                        emit status(item.path, "Error", "Failed to create new upload resource", reply->url().toString());
+                    }
                 }
             }
             else
@@ -337,10 +446,12 @@ void UploadPlugin::uploadFinished()
                 uploadChunk(reply);
             }
         }
-        else if (m_uploadProtocol == UploadInterface::ProtocolMultipart) {
-
+        else if (m_uploadProtocol == UploadInterface::ProtocolMultipart)
+        {
+            qDebug() << "What's here?";
         }
-        else {
+        else
+        {
             qDebug() << "No one knows";
         }
     }
