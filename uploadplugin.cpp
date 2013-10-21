@@ -121,7 +121,30 @@ void UploadPlugin::stop(const QStringList &pathList)
 
 void UploadPlugin::stopUpload(const QString &path, bool pause)
 {
+    QNetworkReply *reply = urlHash[path];
 
+    if (reply) {
+        disconnect(reply, SIGNAL(downloadProgress(qint64,qint64)),
+                this, SLOT(downloadProgress(qint64,qint64)));
+        disconnect(reply, SIGNAL(finished()),
+                this, SLOT(downloadFinished()));
+        disconnect(reply, SIGNAL(readyRead()),
+                this, SLOT(downloadReadyRead()));
+        disconnect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
+                this, SLOT(downloadError(QNetworkReply::NetworkError)));
+        disconnect(reply, SIGNAL(sslErrors(QList<QSslError>)),
+                this, SLOT(downloadSslErrors(QList<QSslError>)));
+
+        UploadItem item = uploadHash[reply];
+        reply->abort();
+
+        uploadHash.remove(reply);
+        urlHash.remove(item.path);
+
+        startNextUpload();
+
+        reply->deleteLater();
+    }
 }
 
 void UploadPlugin::connectSignals(QNetworkReply *reply)
@@ -386,11 +409,14 @@ void UploadPlugin::uploadFinished()
                         qDebug() << "Has history id" << historyId;
                         item.historyId = historyId;
                     }
+
+                    /*
                     else
                     {
                         qDebug() << "No history Id";
                         qDebug() << reply->rawHeaderList();
                     }
+                    */
 
                     uploadHash[reply] = item;
                     uploadChunk(reply);
@@ -413,11 +439,14 @@ void UploadPlugin::uploadFinished()
                             qDebug() << "Has history id" << historyId;
                             item.historyId = historyId;
                         }
+
+                        /*
                         else
                         {
                             qDebug() << "No history Id";
                             qDebug() << reply->rawHeaderList();
                         }
+                        */
 
                         emit urlSet(item.path, item.submitUrl);
 
