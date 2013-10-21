@@ -81,8 +81,6 @@ private:
 
     void uploadChunk(QNetworkReply *reply);
 
-    QByteArray getChecksum(const QString &filename);
-
 private:
     QNetworkAccessManager manager;
     QQueue<UploadItem> uploadQueue;

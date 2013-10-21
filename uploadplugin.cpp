@@ -220,23 +220,6 @@ void UploadPlugin::uploadChunk(QNetworkReply *reply)
     }
 }
 
-QByteArray UploadPlugin::getChecksum(const QString &filename)
-{
-    QCryptographicHash hash(QCryptographicHash::Sha1);
-    QFile file(filename);
-
-    if (file.open(QIODevice::ReadOnly))
-    {
-        hash.addData( file.readAll() );
-    }
-    else
-    {
-        qDebug() << "Failed to open file" << filename;
-    }
-
-    return hash.result();
-}
-
 void UploadPlugin::startNextUpload()
 {
     if (uploadQueue.isEmpty()) {
@@ -264,6 +247,11 @@ void UploadPlugin::startNextUpload()
 
                 QNetworkReply * reply = manager.sendCustomRequest(request, "HEAD");
                 connectSignals(reply);
+
+                emit status(item.path, "Resume", "Start resume upload file", m_uploadUrl.toString());
+
+                uploadHash[reply] = item;
+                urlHash[item.path] = reply;
             }
             else
             {
@@ -341,38 +329,43 @@ void UploadPlugin::startNextUpload()
 void UploadPlugin::uploadProgress(qint64 bytesSent, qint64 bytesTotal)
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
-    UploadItem item = uploadHash[reply];
-    qint64 actualSent = item.sent + bytesSent;
-    double speed = actualSent * 1000.0 / item.time.elapsed();
-    QString unit;
-    if (speed < 1024) {
-        unit = "bytes/sec";
-    } else if (speed < 1024*1024) {
-        speed /= 1024;
-        unit = "kB/s";
-    } else {
-        speed /= 1024*1024;
-        unit = "MB/s";
-    }
-    int percent = actualSent * 100 / item.size;
 
-    if (item.stage > 0) {
-        //qDebug() << "upload" << item.path << actualSent << item.size << percent << speed << unit;
-        emit progress(item.path, actualSent, item.size, percent, speed, unit);
+    if(reply->error() == QNetworkReply::NoError)
+    {
+        UploadItem item = uploadHash[reply];
+        qint64 actualSent = item.sent + bytesSent;
+        double speed = actualSent * 1000.0 / item.time.elapsed();
+        QString unit;
+        if (speed < 1024) {
+            unit = "bytes/sec";
+        } else if (speed < 1024*1024) {
+            speed /= 1024;
+            unit = "kB/s";
+        } else {
+            speed /= 1024*1024;
+            unit = "MB/s";
+        }
+        int percent = actualSent * 100 / item.size;
+
+        if (item.stage > 0) {
+            //qDebug() << "upload" << item.path << actualSent << item.size << percent << speed << unit;
+            emit progress(item.path, actualSent, item.size, percent, speed, unit);
+        }
     }
 }
 
 void UploadPlugin::uploadFinished()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
-    UploadItem item = uploadHash[reply];
-    int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-
-    //QByteArray customVerb = reply->request().attribute(QNetworkRequest::CustomVerbAttribute).toByteArray();
-    //qDebug() << statusCode << customVerb;
 
     if(reply->error() == QNetworkReply::NoError)
     {
+        UploadItem item = uploadHash[reply];
+        int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+
+        //QByteArray customVerb = reply->request().attribute(QNetworkRequest::CustomVerbAttribute).toByteArray();
+        //qDebug() << statusCode << customVerb;
+
         if (m_uploadProtocol == UploadInterface::ProtocolTus)
         {
             if (item.stage == 0)
@@ -389,7 +382,7 @@ void UploadPlugin::uploadFinished()
 
                     if (reply->hasRawHeader("History-Id"))
                     {
-                        QByteArray historyId = reply->rawHeader("Location");
+                        QByteArray historyId = reply->rawHeader("History-Id");
                         qDebug() << "Has history id" << historyId;
                         item.historyId = historyId;
                     }
@@ -467,6 +460,11 @@ void UploadPlugin::uploadError(QNetworkReply::NetworkError)
 
     emit status(item.path, "Error", reply->errorString(), item.submitUrl);
     emit progress(item.path, 0, 0, 0, 0, "bytes/sec");
+
+    uploadHash.remove(reply);
+    urlHash.remove(item.path);
+
+    startNextUpload();
 }
 
 void UploadPlugin::uploadSslErrors(QList<QSslError>)
