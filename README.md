@@ -3,7 +3,7 @@
 Implement:
 
 * Multipart file upload
-* [tus](http://tus.io/) resumable file upload. Follow [brewtus](https://github.com/vayam/brewtus) implementation
+* [TUS Protocol 0.2.1](http://tus.io/protocols/resumable-upload.html) Client Implementation. Use [brewtus](https://github.com/vayam/brewtus) as test server
 
 Upload host is in [download host](https://github.com/arifsetiawan/qt-download-host)
 
