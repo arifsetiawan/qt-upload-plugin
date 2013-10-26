@@ -56,7 +56,7 @@ public:
     void pause(const QStringList &pathList);
 
     void resume(const QString &path, const QString &submitUrl = "");
-    void resume(const QStringList &pathList);
+    void resume(const QList<UploadResumePair> & pathList);
 
     void stop(const QString &path);
     void stop(const QStringList &pathList);
