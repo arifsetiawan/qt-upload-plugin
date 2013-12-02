@@ -7,10 +7,6 @@
 #include <QTimer>
 #include <QBuffer>
 
-#include "json.h"
-using QtJson::JsonObject;
-using QtJson::JsonArray;
-
 UploadPlugin::UploadPlugin(QObject * parent)
     : UploadInterface (parent)
 {
@@ -504,27 +500,8 @@ void UploadPlugin::uploadSslErrors(QList<QSslError>)
     reply->ignoreSslErrors();
 }
 
-void UploadPlugin::setBandwidthLimit(int size)
+void UploadPlugin::setBandwidthLimit(int bytesPerSecond)
 {
-}
-
-void UploadPlugin::addSocket(QIODevice *socket)
-{
-}
-
-void UploadPlugin::removeSocket(QIODevice *socket)
-{
-}
-
-void UploadPlugin::transfer()
-{
-}
-
-void UploadPlugin::scheduleTransfer()
-{
-}
-
-QString UploadPlugin::getStatus() const
-{
-    return "";
+    m_bandwidthLimit = bytesPerSecond;
+    // TODO :: implement rate controller
 }

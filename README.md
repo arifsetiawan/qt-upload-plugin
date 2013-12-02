@@ -1,12 +1,39 @@
 # Qt Upload Plugin
 
-Implement:
+Resumable Qt upload plugin.
 
-* Multipart file upload
+See `UploadInterface` for plugin methods and signals
+
+This plugin implement:
+
 * [TUS Protocol 0.2.1](http://tus.io/protocols/resumable-upload.html) Client Implementation. Use [brewtus](https://github.com/vayam/brewtus) as test server
+* Multipart file upload (not fully tested yet)
 
-Upload host is in [download host](https://github.com/arifsetiawan/qt-download-host)
+## How to use
 
-Uploader interface defined [here](https://github.com/arifsetiawan/qt-download-host/blob/master/interfaces/uploader.h)
+#### 1. Load plugin using `QPluginLoader`
+#### 2. Set plugin parameters:
 
-Built with Qt 4.8.1 with MSVC2008 on Windows 7 32 bit
+```
+uploader.setQueueSize(size)
+uploader.setChunkSize(size)
+uploader.setPatchVerb(patchVerb)
+uploader.setUploadProtocol(protocol)
+uploader.setUploadUrl(uploadUrl)
+```
+
+alternatively one can use
+
+```
+uploader.setDefaultParameters();
+```
+
+#### 3. Start upload using `append`
+
+```
+uploader.append(filepath);
+```
+
+## Example
+
+`PluginHost` project shows examples how to use upload plugin. Clone the project in the same directory as the plugin.

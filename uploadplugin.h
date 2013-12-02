@@ -1,7 +1,7 @@
 #ifndef DOWNLOADPLUGIN_H
 #define DOWNLOADPLUGIN_H
 
-#include "uploader.h"
+#include "uploadinterface.h"
 #include <QObject>
 #include <QtPlugin>
 #include <QNetworkAccessManager>
@@ -18,6 +18,11 @@
 #include <QSslError>
 #include <QHttpMultiPart>
 
+
+/**
+ * Upload item is several variables about an upload.
+ * Used in upload queue.
+ */
 struct UploadItem {
     QString key;
     QString path;
@@ -34,6 +39,10 @@ struct UploadItem {
     QByteArray historyId;
 };
 
+/**
+ * UploadInterface implementation.
+ * \see UploadInterface for detailed comments about Upload plugin.
+ */
 class UploadPlugin : public UploadInterface
 {
     Q_OBJECT
@@ -47,8 +56,6 @@ public:
     QString version() const;
     void setDefaultParameters();
 
-    QString getStatus() const;
-
     void append(const QString &path);
     void append(const QStringList &pathList);
 
@@ -61,24 +68,22 @@ public:
     void stop(const QString &path);
     void stop(const QStringList &pathList);
 
-    void setBandwidthLimit(int size);
+    void setBandwidthLimit(int bytesPerSecond);
 
 private slots:
     void startNextUpload();
+
+    /**
+     * Slots for QNetworkReply.
+     */
     void uploadProgress(qint64 bytesSent, qint64 bytesTotal);
     void uploadFinished();
     void uploadError(QNetworkReply::NetworkError);
     void uploadSslErrors(QList<QSslError>);
 
 private:
-    void addSocket(QIODevice *socket);
-    void removeSocket(QIODevice *socket);
-    void transfer();
-    void scheduleTransfer();
-
     void stopUpload(const QString &url, bool pause);
     void connectSignals(QNetworkReply *reply);
-
     void uploadChunk(QNetworkReply *reply);
 
 private:
@@ -87,10 +92,6 @@ private:
     QHash<QNetworkReply*, UploadItem> uploadHash;
     QHash<QString, QNetworkReply*> urlHash;
     QList<UploadItem> completedList;
-
-    QSet<QIODevice*> replies;
-    QTime stopWatch;
-    bool transferScheduled;
 };
 
 #endif // DOWNLOADPLUGIN_H
