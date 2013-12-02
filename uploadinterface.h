@@ -178,22 +178,22 @@ signals:
      * Signal emitted when submitUrl is set and upload will begin.
      * In tus, we first register the file to server and server will send upload url to use.
      */
-    void urlSet(const QString path, const QString url);
+    void urlSet(const QString &path, const QString &url);
 
     /**
      * Signal emitted when upload complete.
      */
-    void finished(const QString path, const QString submitUrl);
+    void finished(const QString &path, const QString &submitUrl);
 
     /**
      * Signal emitted to update upload progress.
      */
-    void progress(const QString path, qint64 bytesSent, qint64 bytesTotal, double percent, double speed, QString unit);
+    void progress(const QString &path, const qint64 bytesSent, const qint64 bytesTotal, const double percent, const double speed, const QString &unit);
 
     /**
      * Signal emitted to update upload status
      */
-    void status(const QString path, const QString status, const QString message, const QString data);
+    void status(const QString &path, const QString &status, const QString &message, const QString &data);
 
 protected:
     int m_queueSize;

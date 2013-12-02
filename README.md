@@ -2,7 +2,7 @@
 
 Resumable Qt upload plugin.
 
-See `UploadInterface` for plugin methods and signals
+See [`UploadInterface`](https://github.com/arifsetiawan/qt-upload-plugin/blob/master/uploadinterface.h) for plugin methods and signals
 
 This plugin implement:
 
@@ -36,4 +36,4 @@ uploader.append(filepath);
 
 ## Example
 
-`PluginHost` project shows examples how to use upload plugin. Clone the project in the same directory as the plugin.
+[`PluginHost`](https://github.com/arifsetiawan/qt-plugin-host) project shows examples how to use upload plugin. Clone the project in the same directory as the plugin.

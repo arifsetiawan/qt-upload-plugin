@@ -275,7 +275,7 @@ void UploadPlugin::startNextUpload()
                 QNetworkReply * reply = manager.head(request);
                 connectSignals(reply);
 
-                qDebug() << "START" << reply;
+                //qDebug() << "START" << reply;
 
                 emit status(item.path, "Resume", "Start resume upload file", m_uploadUrl.toString());
 
@@ -303,7 +303,7 @@ void UploadPlugin::startNextUpload()
 
                 if (m_additionalHeaders.length() > 0)
                 {
-                    qDebug() << "Has additional headers";
+                    //qDebug() << "Has additional headers";
                     for (int i = 0; i < m_additionalHeaders.size(); i++)
                     {
                         RawHeaderPair header = m_additionalHeaders[i];
@@ -359,7 +359,7 @@ void UploadPlugin::uploadProgress(qint64 bytesSent, qint64 bytesTotal)
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
 
-    qDebug() << "PROGRESS" << reply;
+    //qDebug() << "PROGRESS" << reply;
 
     if(reply->error() == QNetworkReply::NoError)
     {
@@ -379,7 +379,7 @@ void UploadPlugin::uploadProgress(qint64 bytesSent, qint64 bytesTotal)
         int percent = actualSent * 100 / item.size;
 
         if (item.stage > 0) {
-            qDebug() << "upload" << item.path << actualSent << item.size << percent << speed << unit;
+            //qDebug() << "upload" << item.path << actualSent << item.size << percent << speed << unit;
             emit progress(item.path, actualSent, item.size, percent, speed, unit);
         }
     }
@@ -389,7 +389,7 @@ void UploadPlugin::uploadFinished()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
 
-    qDebug() << "FINISHED" << reply;
+    //qDebug() << "FINISHED" << reply;
 
     if(reply->error() == QNetworkReply::NoError)
     {
@@ -407,7 +407,7 @@ void UploadPlugin::uploadFinished()
                 {
                     QByteArray offset = reply->rawHeader("Offset");
 
-                    qDebug() << "Get resume offset" << offset;
+                    //qDebug() << "Get resume offset" << offset;
 
                     item.stage = 1;
                     item.chunkCounter = 0;
@@ -481,9 +481,9 @@ void UploadPlugin::uploadError(QNetworkReply::NetworkError)
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     UploadItem item = uploadHash[reply];
 
-    qDebug() << "ERROR" << reply;
+    //qDebug() << "ERROR" << reply;
 
-    qDebug() << "uploadError: " << item.submitUrl << reply->errorString();
+    //qDebug() << "uploadError: " << item.submitUrl << reply->errorString();
 
     emit status(item.path, "Error", reply->errorString(), item.submitUrl);
     emit progress(item.path, 0, 0, 0, 0, "bytes/sec");

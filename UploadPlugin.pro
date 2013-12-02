@@ -10,5 +10,4 @@ SOURCES += uploadplugin.cpp
 HEADERS += uploadplugin.h \
     uploadinterface.h
 
-OTHER_FILES += \
-    README.md
+OTHER_FILES +=
